@@ -1,0 +1,22 @@
+// 顶层构建文件：与 Paddle-Lite-Demo 官方 demo 同代（AGP 4.1.0）
+// 注意：用户全局 ~/.gradle/init.gradle 已注入阿里云镜像，google()/jcenter() 实际走镜像
+buildscript {
+    repositories {
+        google()
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:4.1.0'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        jcenter()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

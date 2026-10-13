@@ -218,3 +218,44 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- HuiyanAgri 追加 ----
+# 模型权重与移动端产物（走 GitHub Releases 分发）
+*.pdparams
+*.pdopt
+*.pdema
+*.pdmodel
+*.pdiparams
+*.pdiparams.info
+*.nb
+*.apk
+*.aar
+
+# 训练/推理输出与临时
+output/
+export_qat/
+vdl/
+_tmp_eval/
+*.log
+.mimosa/
+
+# Android 构建产物与本机配置
+android/app/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/v211_bak/
+*.iml
+.idea/
+
+# 数据集不入库（第三方许可）
+dataset/
+dataset640/
+raw/
+
+# 例外：安卓推理库是构建必需（覆盖模板的 *.so 规则）
+!android/app/src/main/jniLibs/**/*.so
+!android/app/libs/*.jar
+
+# 例外：训练日志作为结果证据入库
+!docs/logs/*.log
+

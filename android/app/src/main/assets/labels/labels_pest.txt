@@ -1,0 +1,14 @@
+aphid 蚜虫
+beet_army_worm 甜菜夜蛾
+corn_borer 玉米螟
+corn_leaf_blight 玉米大斑病
+leafhopper 叶蝉
+mole_cricket 蝼蛄
+potato_early_blight 马铃薯早疫病
+potato_late_blight 马铃薯晚疫病
+tomato_bacterial_spot 番茄细菌性斑点病
+tomato_early_blight 番茄早疫病
+tomato_late_blight 番茄晚疫病
+tomato_mold_leaf 番茄叶霉病
+tomato_septoria_leaf_spot 番茄壳针孢叶斑病
+tomato_leaf_healthy 番茄健康叶片

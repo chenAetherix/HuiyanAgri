@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色规范（主页改版文字稿）：主绿/正文黑/辅助灰/边框浅灰/页面底/卡片白 -->
+    <color name="colorPrimary">#289b55</color>
+    <color name="colorPrimaryDark">#1f7a42</color>
+    <color name="colorAccent">#289b55</color>
+    <color name="pageBg">#f8f9fa</color>
+    <color name="cardBg">#ffffff</color>
+    <color name="textMain">#333333</color>
+    <color name="textSub">#666666</color>
+    <color name="borderGray">#dddddd</color>
+    <color name="btnDisabled">#c9ced3</color>
+    <color name="trackBg">#e5e7eb</color>
+    <!-- 检测大类配色（与演示系统一致） -->
+    <color name="pestRed">#e05d43</color>
+    <color name="pestUnderOrange">#c2622b</color>
+    <color name="diseaseBlue">#3b82c4</color>
+    <color name="healthyGreen">#289b55</color>
+</resources>

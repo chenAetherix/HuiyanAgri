@@ -1,0 +1,166 @@
+# 赛题一 agripest 冲分实验：PP-YOLOE+_M（CSPResNet-m + CustomCSPPAN + PPYOLOEHead）
+# 前序：PP-YOLOE+_S 同条件实测 val 0.421/0.639（超 PicoDet-L 基准 0.3694/0.6044 +5.2/+3.5）
+# 本配置在 S 实验基础上的三处调整（其余全部同 S）：
+#   ① M 档缩放 depth 0.67 / width 0.75（S 为 0.33/0.50），预训练换 ppyoloe_plus_crn_m_80e_coco；
+#   ② epoch 100→60：S 轨迹 ep40 后过拟合回落（0.421→0.376），60ep+best_model 机制够用；
+#   ③ 多尺度 576~704 → 官方宽范围 320~768：宽尺度本身是正则（S 过拟合明显），
+#     且为 TTA 的 960 分支提供分布外缓冲。
+# 参数量：17.1M（S 7.93M / PicoDet-L 5.81M）。
+
+use_gpu: true
+use_xpu: false
+use_mlu: false
+use_npu: false
+use_gcu: false
+log_iter: 100
+save_dir: output
+snapshot_epoch: 5
+print_flops: false
+print_params: false
+
+export:
+  post_process: True
+  nms: True
+  benchmark: False
+  fuse_conv_bn: False
+
+metric: COCO
+num_classes: 14
+# COCO 80e 全量检测权重：backbone/neck 正常加载，head 分类层因类别数不同自动跳过（微调标准做法）
+pretrain_weights: https://bj.bcebos.com/v1/paddledet/models/ppyoloe_plus_crn_m_80e_coco.pdparams
+weights: output/ppyoloe_m_agripest/best_model
+depth_mult: 0.67
+width_mult: 0.75
+
+epoch: 300
+
+# ---- optimizer（官方 base_lr 0.001@bs64 → 单卡 bs8 线性缩放 = 1.3e-4；M+宽尺度 768 档 bs12 实测 OOM 24G 卡）----
+LearningRate:
+  base_lr: 0.00013
+  schedulers:
+    - name: CosineDecay
+      max_epochs: 300
+    - name: LinearWarmup
+      start_factor: 0.
+      epochs: 5
+
+OptimizerBuilder:
+  optimizer:
+    momentum: 0.9
+    type: Momentum
+  regularizer:
+    factor: 0.0005
+    type: L2
+
+architecture: YOLOv3
+norm_type: sync_bn
+use_ema: true
+ema_decay: 0.9998
+ema_black_list: ['proj_conv.weight']
+custom_black_list: ['reduce_mean']
+
+YOLOv3:
+  backbone: CSPResNet
+  neck: CustomCSPPAN
+  yolo_head: PPYOLOEHead
+  post_process: ~
+
+CSPResNet:
+  layers: [3, 6, 6, 3]
+  channels: [64, 128, 256, 512, 1024]
+  return_idx: [1, 2, 3]
+  use_large_stem: True
+  use_alpha: True
+
+CustomCSPPAN:
+  out_channels: [768, 384, 192]
+  stage_num: 1
+  block_num: 3
+  act: 'swish'
+  spp: true
+
+PPYOLOEHead:
+  fpn_strides: [32, 16, 8]
+  grid_cell_scale: 5.0
+  grid_cell_offset: 0.5
+  static_assigner_epoch: 30
+  use_varifocal_loss: True
+  loss_weight: {class: 1.0, iou: 2.5, dfl: 0.5}
+  static_assigner:
+    name: ATSSAssigner
+    topk: 9
+  assigner:
+    name: TaskAlignedAssigner
+    topk: 13
+    alpha: 1.0
+    beta: 6.0
+  nms:
+    name: MultiClassNMS
+    nms_top_k: 1000
+    keep_top_k: 300
+    score_threshold: 0.01
+    nms_threshold: 0.7
+
+# ---- data（与 r2 完全一致：train_r2_balanced + 15% 空图负样本，控制变量只换网络）----
+TrainDataset:
+  name: COCODataSet
+  image_dir: images/train
+  anno_path: annotations/train_r2_balanced.json
+  dataset_dir: ../agripest/dataset
+  data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd']
+  allow_empty: true
+  empty_ratio: 0.15
+
+EvalDataset:
+  name: COCODataSet
+  image_dir: images/val
+  anno_path: annotations/val.json
+  dataset_dir: ../agripest/dataset
+  allow_empty: true
+
+TestDataset:
+  name: ImageFolder
+  image_dir: images/val
+  anno_path: annotations/val.json
+  dataset_dir: ../agripest/dataset
+
+worker_num: 4
+eval_height: &eval_height 640
+eval_width: &eval_width 640
+eval_size: &eval_size [*eval_height, *eval_width]
+
+TrainReader:
+  sample_transforms:
+    - Decode: {}
+    - RandomDistort: {}
+    - RandomExpand: {fill_value: [123.675, 116.28, 103.53]}
+    - RandomCrop: {}
+    - RandomFlip: {}
+  batch_transforms:
+    - BatchRandomResize: {target_size: [320, 352, 384, 416, 448, 480, 512, 544, 576, 608, 640, 672, 704, 736, 768], random_size: True, random_interp: True, keep_ratio: False}
+    - NormalizeImage: {mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225], is_scale: True}
+    - Permute: {}
+    - PadGT: {}
+  batch_size: 8   # M+宽尺度 768 档 bs12 实测 OOM（23.5G/24G），降 8；lr 已等比 0.00013
+  shuffle: true
+  drop_last: true
+  use_shared_memory: true
+  collate_batch: true
+
+EvalReader:
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: *eval_size, keep_ratio: False, interp: 2}
+    - NormalizeImage: {mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225], is_scale: True}
+    - Permute: {}
+  batch_size: 4
+
+TestReader:
+  inputs_def:
+    image_shape: [3, *eval_height, *eval_width]
+  sample_transforms:
+    - Decode: {}
+    - Resize: {target_size: *eval_size, keep_ratio: False, interp: 2}
+    - NormalizeImage: {mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225], is_scale: True}
+    - Permute: {}
+  batch_size: 1

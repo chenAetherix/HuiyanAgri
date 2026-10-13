@@ -1,0 +1,54 @@
+# ==================================================================
+# PP-YOLOE+_S-640 agripest 的 QAT INT8 量化训练配置（配合 --slim_config 使用）
+# 流程（服务器 ~/ljytrain/PaddleDetection 下）：
+#   0) 先确认 FP32 最优权重位置（不同请同步改本文件 pretrain_weights 一行）：
+#      ls -la output/ppyoloe_s_agripest/best_model.pdparams
+#   1) 量化微调（save_dir 必须独立，防覆盖 FP32 best）：
+#      nohup python tools/train.py -c ../agripest/configs/ppyoloe_plus_crn_s_100e_agripest.yml \
+#          --slim_config ../agripest/configs/ppyoloe_plus_crn_s_qat_agripest.yml --eval \
+#          -o save_dir=output/ppyoloe_s_qat weights=output/ppyoloe_s_qat/best_model \
+#          > train_qat.log 2>&1 &
+#   2) 跑完看成绩（对照 FP32 训练链路 Best 0.421 / 0.639）：
+#      grep "Best test" train_qat.log | tail -3
+#   3) 导出 INT8 推理模型（必须同样带 --slim_config，否则导出的仍是 FP32）：
+#      python tools/export_model.py -c ../agripest/configs/ppyoloe_plus_crn_s_100e_agripest.yml \
+#          --slim_config ../agripest/configs/ppyoloe_plus_crn_s_qat_agripest.yml \
+#          -o weights=output/ppyoloe_s_qat/best_model.pdparams --output_dir=export_qat/
+#   4) 体积数字（对照 FP32 的 ~30.3MB pdiparams）：
+#      ls -la export_qat/ppyoloe_plus_crn_s_100e_agripest/
+#
+# 参数依据：QAT 微调 lr = 训练 lr 的 1/10（2e-4 → 2e-5，官方 S-416 QAT 同规则）；
+#   epoch 50（从已收敛权重恢复量化精度，无需全程）；bs 8（fake quant 节点比 FP32 更占显存，
+#   3090 预计 12~16GB；若 OOM 再降 bs 6 并把 lr 减到 1.5e-5）。
+# 掉点预期：检测模型 QAT 通常 0.5~2 mAP；若 >3 点，在 quant_config 里加
+#   'exclude_param_prefix': ['yolo_head.proj_conv'] 排除检测头投影层后重跑。
+# ==================================================================
+
+pretrain_weights: output/best_model.pdparams
+slim: QAT
+
+QAT:
+  quant_config: {
+    'activation_preprocess_type': 'PACT',
+    'weight_quantize_type': 'channel_wise_abs_max', 'activation_quantize_type': 'moving_average_abs_max',
+    'weight_bits': 8, 'activation_bits': 8, 'dtype': 'int8', 'window_size': 10000, 'moving_rate': 0.9,
+    'quantizable_layer_type': ['Conv2D', 'Linear']}
+  print_model: False
+
+# QAT 微调日程（覆盖主配置）
+epoch: 50
+
+TrainReader:
+  batch_size: 8
+
+EvalReader:
+  batch_size: 4
+
+LearningRate:
+  base_lr: 0.00002
+  schedulers:
+  - name: CosineDecay
+    max_epochs: 50
+  - name: LinearWarmup
+    start_factor: 0.1
+    steps: 200

@@ -1,0 +1,15 @@
+<resources>
+    <!-- NoActionBar：AppBar 由布局内自绘（左标题 + 右头像，#289b55 主绿） -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:windowBackground">@color/pageBg</item>
+    </style>
+
+    <!-- 模式 Tab 文字：14sp（选中色/未选中色由 TabLayout 属性控制） -->
+    <style name="TabText" parent="TextAppearance.Design.Tab">
+        <item name="android:textSize">14sp</item>
+        <item name="textAllCaps">false</item>
+    </style>
+</resources>

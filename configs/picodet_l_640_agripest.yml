@@ -1,0 +1,175 @@
+# ==================================================================
+# 赛题一 agripest 主力模型（v3 优化版）：PP-PicoDet-L 640 (LCNet-2.0x)
+# 官方 COCO 指标：42.6 mAP / 5.80M 参数 —— 精度比 S-416 (+10.1 mAP)，
+# 参数量仍仅为 YOLOv8s 的一半、RT-DETR-R18 的 1/3。
+# 从 PaddleDetection 仓库根目录启动：
+#   python tools/train.py -c ../agripest/configs/picodet_l_640_agripest.yml --eval --use_vdl
+# 训练前先跑弱类平衡：python ../agripest/scripts/balance_train.py
+# ==================================================================
+
+metric: COCO
+# PicoDet 为 sigmoid 无背景类头：num_classes = 类别数（不加 1）
+num_classes: 14
+
+architecture: PicoDet
+pretrain_weights: https://paddle-imagenet-models-name.bj.bcebos.com/dygraph/legendary_models/PPLCNet_x2_0_pretrained.pdparams
+weights: output/picodet_l_640_agripest/best_model
+find_unused_parameters: True
+use_ema: true
+epoch: 300
+snapshot_epoch: 10
+
+# ---- runtime ----
+use_gpu: true
+log_iter: 20
+# checkpoint 落盘目录（epoch 快照与 best_model 都存这里，不是 weights 字段）
+save_dir: output/picodet_l_640_agripest
+export:
+  post_process: True
+  nms: True
+  benchmark: False
+  fuse_conv_bn: False
+
+PicoDet:
+  backbone: LCNet
+  neck: LCPAN
+  head: PicoHeadV2
+
+LCNet:
+  scale: 2.0
+  feature_maps: [3, 4, 5]
+
+LCPAN:
+  out_channels: 160
+  use_depthwise: True
+  num_features: 4
+
+PicoHeadV2:
+  conv_feat:
+    name: PicoFeat
+    feat_in: 160
+    feat_out: 160
+    num_convs: 4
+    num_fpn_stride: 4
+    norm_type: bn
+    share_cls_reg: True
+    use_se: True
+  fpn_stride: [8, 16, 32, 64]
+  feat_in_chan: 160
+  prior_prob: 0.01
+  reg_max: 7
+  cell_offset: 0.5
+  grid_cell_scale: 5.0
+  static_assigner_epoch: 100
+  use_align_head: True
+  static_assigner:
+    name: ATSSAssigner
+    topk: 9
+    force_gt_matching: False
+  assigner:
+    name: TaskAlignedAssigner
+    topk: 13
+    alpha: 1.0
+    beta: 6.0
+  loss_class:
+    name: VarifocalLoss
+    use_sigmoid: False
+    iou_weighted: True
+    loss_weight: 1.0
+  loss_dfl:
+    name: DistributionFocalLoss
+    loss_weight: 0.5
+  loss_bbox:
+    name: GIoULoss
+    loss_weight: 2.5
+  nms:
+    name: MultiClassNMS
+    nms_top_k: 1000
+    keep_top_k: 100
+    score_threshold: 0.025
+    nms_threshold: 0.6
+
+# ---- data（上传布局：PaddleDetection/ 与 agripest/ 并排；从 PaddleDetection/ 目录启动训练）----
+TrainDataset:
+  name: COCODataSet
+  image_dir: images/train
+  anno_path: annotations/train_balanced.json
+  dataset_dir: ../agripest/dataset
+  data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd']
+  # 背景负样本：不开 allow_empty 时约 1238 张纯背景图会被静默丢弃
+  allow_empty: true
+  empty_ratio: 0.15   # 空图占最终训练记录的比例
+
+EvalDataset:
+  name: COCODataSet
+  image_dir: images/val
+  anno_path: annotations/val.json
+  dataset_dir: ../agripest/dataset
+  allow_empty: true
+
+TestDataset:
+  name: ImageFolder
+  image_dir: images/val
+  anno_path: annotations/val.json
+  dataset_dir: ../agripest/dataset
+
+worker_num: 4
+eval_height: &eval_height 640
+eval_width: &eval_width 640
+eval_size: &eval_size [*eval_height, *eval_width]
+
+# ---- reader（官方 640 多尺度 + 田间增强 RandomExpand）----
+TrainReader:
+  sample_transforms:
+  - Decode: {}
+  - RandomExpand: {fill_value: [114, 114, 114]}
+  - RandomCrop: {}
+  - RandomFlip: {prob: 0.5}
+  - RandomDistort: {}
+  batch_transforms:
+  - BatchRandomResize: {target_size: [576, 608, 640, 672, 704], random_size: True, random_interp: True, keep_ratio: False}
+  - NormalizeImage: {is_scale: true, mean: [0.485,0.456,0.406], std: [0.229,0.224,0.225]}
+  - Permute: {}
+  - PadGT: {}
+  batch_size: 12   # 服务器大显存卡用 12；8GB 消费卡实测 @640 batch 8 即显存顶满极慢，降 4-6
+  shuffle: true
+  drop_last: true
+
+EvalReader:
+  sample_transforms:
+  - Decode: {}
+  - Resize: {interp: 2, target_size: *eval_size, keep_ratio: False}
+  - NormalizeImage: {is_scale: true, mean: [0.485,0.456,0.406], std: [0.229,0.224,0.225]}
+  - Permute: {}
+  batch_transforms:
+  - PadBatch: {pad_to_stride: 32}
+  batch_size: 4
+  shuffle: false
+
+TestReader:
+  inputs_def:
+    image_shape: [1, 3, *eval_height, *eval_width]
+  sample_transforms:
+  - Decode: {}
+  - Resize: {interp: 2, target_size: *eval_size, keep_ratio: False}
+  - NormalizeImage: {is_scale: true, mean: [0.485,0.456,0.406], std: [0.229,0.224,0.225]}
+  - Permute: {}
+  batch_size: 1
+
+# ---- optimizer（官方 batch 48 lr 0.06 的线性缩放：batch 12 → 0.015）----
+LearningRate:
+  base_lr: 0.015
+  schedulers:
+  - name: CosineDecay
+    max_epochs: 300
+  - name: LinearWarmup
+    start_factor: 0.1
+    steps: 500
+
+OptimizerBuilder:
+  optimizer:
+    momentum: 0.9
+    type: Momentum
+  regularizer:
+    factor: 0.00004
+    type: L2

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 加大圆点（22dp）便于手指触摸：白底 + 主绿描边 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#ffffff" />
+    <stroke
+        android:width="3dp"
+        android:color="@color/colorPrimary" />
+    <size
+        android:width="22dp"
+        android:height="22dp" />
+</shape>

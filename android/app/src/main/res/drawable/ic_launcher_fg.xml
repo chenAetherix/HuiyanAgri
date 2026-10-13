@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 简化叶片（双叶 + 中脉） -->
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M54,30 C42,32 36,44 38,60 C40,74 46,80 54,82 C62,80 68,74 70,60 C72,44 66,32 54,30 Z M52,78 L52,38"
+        android:strokeColor="#2f9e63"
+        android:strokeWidth="2" />
+</vector>

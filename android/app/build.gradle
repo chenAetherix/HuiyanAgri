@@ -1,0 +1,85 @@
+import java.security.MessageDigest
+
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 29
+    buildToolsVersion "30.0.3"   // 本机 SDK 已装版本，钉死避免联网下载
+    defaultConfig {
+        applicationId "com.agriunified.detection"
+        minSdkVersion 21
+        targetSdkVersion 29
+        versionCode 4
+        versionName "1.4"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        // 农事问答 key：构建时从环境变量 ZHIPU_API_KEY 注入（源码不存凭据；
+        // 未设置则打包为无 key 版，聊天页显示配置提示，检测不受影响）
+        buildConfigField "String", "ZHIPU_API_KEY",
+                "\"${System.getenv('ZHIPU_API_KEY') ?: ''}\""
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    implementation 'com.android.support:design:28.0.0'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+    testImplementation 'junit:junit:4.12'
+}
+
+// 兜底任务：若 PaddlePredictor.jar / libpaddle_lite_jni.so 未预放置，则从官方 CDN 下载
+// （本工程已随仓库预放置，正常情况下此任务直接跳过，支持完全离线构建）
+def paddleLiteLibsUrl = 'https://paddlelite-demo.bj.bcebos.com/libs/android/paddle_lite_libs_v2.11_rc.tar.gz'
+
+task ensurePaddleLiteLibs(type: DefaultTask) {
+    doLast {
+        boolean needJar = !file("libs/PaddlePredictor.jar").exists()
+        boolean needSo = !file("src/main/jniLibs/arm64-v8a/libpaddle_lite_jni.so").exists()
+        if (!needJar && !needSo) {
+            println "Paddle Lite java libs already in place, skip download"
+            return
+        }
+        println "Downloading Paddle Lite libs from BOS..."
+        String cachePath = "cache"
+        if (!file("${cachePath}").exists()) {
+            mkdir "${cachePath}"
+        }
+        MessageDigest messageDigest = MessageDigest.getInstance('MD5')
+        messageDigest.update(paddleLiteLibsUrl.bytes)
+        String cacheName = new BigInteger(1, messageDigest.digest()).toString(32)
+        if (!file("${cachePath}/${cacheName}.tar.gz").exists()) {
+            ant.get(src: paddleLiteLibsUrl, dest: file("${cachePath}/${cacheName}.tar.gz"))
+        }
+        copy {
+            from tarTree("${cachePath}/${cacheName}.tar.gz").matching { include 'java/PaddlePredictor.jar' }
+            into "libs"
+            eachFile { fcd -> fcd.path = 'PaddlePredictor.jar' }
+            includeEmptyDirs = false
+        }
+        copy {
+            from tarTree("${cachePath}/${cacheName}.tar.gz").matching {
+                include 'java/libs/arm64-v8a/*.so', 'java/libs/armeabi-v7a/*.so'
+            }
+            into "src/main/jniLibs"
+            eachFile { fcd -> fcd.path = fcd.relativePath.segments[-2] + '/' + fcd.name }
+            includeEmptyDirs = false
+        }
+    }
+}
+preBuild.dependsOn ensurePaddleLiteLibs
