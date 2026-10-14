@@ -1,4 +1,4 @@
-# HuiyanAgri 慧眼护农
+# HuiyanAgri 慧眼识农
 
 **双引擎农作物有害生物检测系统**：一张图同时检测 **14 类病虫害**（PP-YOLOE+_S）与 **12 类棉田杂草**（PP-PicoDet-L），附防治/防除建议卡与农事问答助手；提供 **Web 演示**与**安卓离线 App** 两种形态。
 
@@ -35,7 +35,7 @@ HuiyanAgri/
 │   ├── eval/                # 评测脚本（mAP/逐类/分层/校准/误报/双口径终评）
 │   └── data_preparation/    # CottonWeedDet12: VIA→COCO + 弱类过采样 + 640 预缩缓存
 ├── web/                     # Gradio 演示（四 Tab：综合/病虫/杂草/农事问答）
-├── android/                 # 安卓 App 源码（慧眼护农，Paddle-Lite 离线推理）
+├── android/                 # 安卓 App 源码（慧眼识农，Paddle-Lite 离线推理）
 └── docs/                    # 模型介绍 / 评测汇总 / 公式手册 / 架构图
 ```
 
@@ -55,7 +55,7 @@ python web/app.py              # 浏览器自动打开 http://127.0.0.1:7862
 
 检测全程本地推理；农事问答 Tab 由智谱 GLM 驱动（`ZHIPU_API_KEY` 环境变量注入，源码不含任何密钥），内置 26 类知识库并自动联动最近一次检测结果。
 
-### 安卓 App（慧眼护农）
+### 安卓 App（慧眼识农）
 
 `android/` 为完整 Gradle 工程（Paddle-Lite 推理，检测完全离线）：
 
