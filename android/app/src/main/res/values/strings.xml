@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">慧眼护农</string>
+    <string name="app_name">慧眼识农</string>
     <string name="guide_text">拍照或上传图片，识别作物病虫害、杂草，获取防治建议</string>
     <string name="btn_chat">农事问答</string>
     <string name="tab_pest">病虫害</string>
